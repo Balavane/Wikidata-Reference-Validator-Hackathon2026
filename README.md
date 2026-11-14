@@ -8,6 +8,7 @@ This tool checks the external reference URLs on a Wikidata item (QID) to determi
 
 * 🔍 Autocompletes and selects Wikidata items
 * 🌐 Searches and labels items in a selectable display language (English by default, used as the fallback)
+* 🔐 Optional sign-in with a Wikimedia account (OAuth 2.0, PKCE or client secret)
 * 🔗 Extracts all reference URLs from the item's statements
 * ⚡ Checks if the referenced URLs are reachable (alive or dead)
 * ❌ Flags dead links and shows which statement they belong to
@@ -89,6 +90,10 @@ python app.py
 Open your browser and go to:
 👉 http://127.0.0.1:5000
 
+Sign-in is optional and needs the settings described in
+[Sign in with Wikimedia](#-sign-in-with-wikimedia-oauth-20); everything else
+works without it.
+
 ### 5. Run the tests
 
 ```bash
@@ -96,6 +101,80 @@ python -m unittest discover -s tests -t . -v
 ```
 
 `python -m unittest` also works from the project root.
+
+---
+
+## 🔐 Sign in with Wikimedia (OAuth 2.0)
+
+Signing in is **optional** — searching and validating work without an account.
+When configured, users can log in with their Wikimedia account from the
+**Log in** link in the header.
+
+This app uses the OAuth 2.0 authorization-code flow against
+`meta.wikimedia.org`. It only reads the basic profile (`username`, `sub`,
+`editcount`, `groups`, `blocked`); it never sees a password and never edits
+anything on the user's behalf.
+
+### 1. Configure the environment
+
+Copy `.env.example` to `.env` and fill in the values:
+
+```bash
+cp .env.example .env
+```
+
+```dotenv
+SECRET_KEY=<long random string>
+WIKIMEDIA_CLIENT_ID=a7d62252493d736604d7219ca46e4f05
+WIKIMEDIA_CLIENT_SECRET=         # required for this consumer
+WIKIMEDIA_USE_PKCE=false         # only for consumers registered without a secret
+WIKIMEDIA_REDIRECT_URI=http://127.0.0.1:5000/oauth/callback
+SESSION_COOKIE_SECURE=false
+```
+
+`SECRET_KEY` signs the session cookie that holds the OAuth state. Generate one with:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+### 2. Register the callback URL
+
+The consumer at
+[Special:OAuthConsumerRegistration](https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration/propose)
+must list the exact callback URL you use locally, e.g.
+`http://127.0.0.1:5000/oauth/callback`. If it does not match, Wikimedia will
+refuse the authorization request.
+
+### 3. Client secret vs. PKCE
+
+Wikimedia has two kinds of OAuth 2.0 consumers:
+
+* **Confidential client (default):** the consumer has a client secret. Set
+  `WIKIMEDIA_CLIENT_SECRET` to that value; the app authenticates to the token
+  endpoint with HTTP Basic auth. A secret is shown when you register the
+  consumer — if it was lost, reset it from the same page. **The consumer
+  registered for this project is confidential**, so this is the mode to use.
+* **Public client:** the consumer was registered *without* a secret. Leave
+  `WIKIMEDIA_CLIENT_SECRET` empty and set `WIKIMEDIA_USE_PKCE=true`; the app
+  then sends a PKCE (S256) challenge and verifier.
+
+PKCE is opt-in because a confidential consumer rejects code exchanges that
+omit its secret, and the app cannot detect which kind a consumer is up front.
+Without a secret and without `WIKIMEDIA_USE_PKCE`, the login page explains that
+sign-in is not configured instead of sending users into a flow that would fail.
+
+Client IDs are public and safe to commit. Never commit `.env` or a client
+secret — both are git-ignored.
+
+### Routes
+
+| Route | Purpose |
+| --- | --- |
+| `GET /login` | Sign-in page (shows an error notice when something fails) |
+| `GET /oauth/login` | Starts the flow and redirects to Wikimedia |
+| `GET /oauth/callback` | Exchanges the code, reads the profile, signs the user in |
+| `POST /logout` | Clears the session |
 
 ---
 

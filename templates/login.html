@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Log in – Wikidata Reference Validator{% endblock %}
+
+{% block body_class %}page-login{% endblock %}
+
+{% block content %}
+<article class="page auth">
+  <p class="page__eyebrow">Account</p>
+  <h1 class="page__title">Log in</h1>
+  <p class="page__tagline">
+    Sign in with your Wikimedia account. The app only reads your basic public profile
+    (username, account ID, edit count and groups), so no password ever reaches this server
+    and nothing is edited on your behalf.
+  </p>
+
+  {% if error %}
+    <div class="notice notice--error" role="alert">
+      <i class="bi bi-exclamation-octagon notice__icon" aria-hidden="true"></i>
+      <div class="notice__body">
+        <p class="notice__message">{{ error }}</p>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if oauth_configured %}
+    <div class="auth__actions">
+      <a class="btn-solid" href="{{ url_for('oauth_login', next=next) }}">
+        <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>
+        Sign in with Wikimedia
+      </a>
+      <a class="btn-ghost" href="{{ url_for('home') }}">Continue without an account</a>
+    </div>
+
+    <div class="prose auth__note">
+      <p>
+        You will be sent to <code>meta.wikimedia.org</code> to approve the request, then returned here.
+        You can revoke access at any time from
+        <a href="https://meta.wikimedia.org/wiki/Special:OAuthManageMyGrants" target="_blank" rel="noopener">your
+        connected apps</a>.
+      </p>
+    </div>
+  {% else %}
+    <div class="notice" role="status">
+      <i class="bi bi-info-circle notice__icon" aria-hidden="true"></i>
+      <div class="notice__body">
+        <p class="notice__message">
+          Wikimedia sign-in is not configured on this server. Set
+          <code>WIKIMEDIA_CLIENT_SECRET</code> (for example in a <code>.env</code> file)
+          to enable it. You can still use the validator without an account.
+        </p>
+        <div class="notice__actions">
+          <a class="btn-ghost" href="{{ url_for('home') }}"><i class="bi bi-search"></i> Check an item</a>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</article>
+{% endblock %}

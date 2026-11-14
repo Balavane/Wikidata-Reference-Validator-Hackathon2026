@@ -239,6 +239,31 @@ body:not(.page-home) .site-header { border-bottom-color: var(--border); }
 .site-nav__link:hover { color: var(--text); background: var(--surface-2); }
 .site-nav__link.is-active { color: var(--primary-text); }
 
+/* Signed-in Wikimedia user in the header */
+.site-nav__user {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 190px;
+  padding: 6px 10px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.site-nav__user i { color: var(--text-faint); }
+.site-nav__user-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-nav form { margin: 0; }
+.site-nav__logout {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .icon-btn {
   display: inline-grid;
   place-items: center;
@@ -1185,6 +1210,19 @@ body:not(.page-home) .site-header { border-bottom-color: var(--border); }
 }
 .page__tagline { margin: 0 0 32px; color: var(--text-muted); font-size: 1.05rem; }
 
+/* Log in page */
+.auth .notice { margin-bottom: 24px; }
+.auth__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.auth__actions .btn-solid,
+.auth__actions .btn-ghost { text-decoration: none; }
+.auth__note { margin-top: 32px; color: var(--text-muted); font-size: 0.95rem; }
+.auth__note p { margin: 0; }
+
 .prose { font-size: 1.02rem; line-height: 1.75; }
 .prose h2 {
   margin: 44px 0 12px;
@@ -1349,6 +1387,8 @@ body:not(.page-home) .site-header { border-bottom-color: var(--border); }
   .site-header__inner { gap: 10px; padding: 0 16px; }
   .brand__version { display: none; }
   .site-nav__link { padding: 6px 8px; font-size: 0.82rem; }
+  .site-nav__user { padding: 6px 4px; }
+  .site-nav__user-name { display: none; }
   .site-main { padding: 0 16px 48px; }
   .site-footer__inner { padding: 18px 16px; }
   .hero { padding-top: 12vh; }

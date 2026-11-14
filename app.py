@@ -1,11 +1,34 @@
-from flask import Flask, request, jsonify, render_template
+import base64
+import hashlib
+import os
+import re
+import secrets
+from datetime import timedelta
+from urllib.parse import urlencode, urlparse
+
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 import requests
 import aiohttp
 import asyncio
-import re
-from urllib.parse import urlparse
+
+try:
+    # Optional: lets local runs read credentials from a .env file.
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 app = Flask(__name__)
+
+# Sessions hold the OAuth state and the signed-in user, so the key must be
+# stable across restarts. Set SECRET_KEY in the environment for real use.
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "").lower() in {"1", "true", "yes"},
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+)
 
 WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 WAYBACK_API = "https://archive.org/wayback/available"
@@ -65,6 +88,187 @@ def language_fallbacks(language):
 @app.context_processor
 def inject_languages():
     return {"languages": SUPPORTED_LANGUAGES, "default_language": DEFAULT_LANGUAGE}
+
+
+# ---------------------------------------------------
+# WIKIMEDIA LOGIN (OAuth 2.0)
+# ---------------------------------------------------
+# Register an OAuth 2.0 consumer at
+# https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration/propose
+# then copy .env.example to .env and fill in the credentials. Client IDs are
+# public; the client secret must never be committed to the repository.
+WIKIMEDIA_OAUTH_CLIENT_ID = os.environ.get(
+    "WIKIMEDIA_CLIENT_ID", "a7d62252493d736604d7219ca46e4f05"
+)
+WIKIMEDIA_OAUTH_CLIENT_SECRET = os.environ.get("WIKIMEDIA_CLIENT_SECRET", "")
+WIKIMEDIA_OAUTH_REDIRECT_URI = os.environ.get("WIKIMEDIA_REDIRECT_URI", "")
+
+# Wikimedia consumers that have a client secret are confidential clients and
+# must send it to the token endpoint. PKCE is only for consumers registered
+# without a secret, so it has to be opted into explicitly.
+WIKIMEDIA_OAUTH_USE_PKCE = os.environ.get("WIKIMEDIA_USE_PKCE", "").lower() in {
+    "1", "true", "yes",
+}
+
+WIKIMEDIA_OAUTH_AUTHORIZE_URL = "https://meta.wikimedia.org/w/rest.php/oauth2/authorize"
+WIKIMEDIA_OAUTH_TOKEN_URL = "https://meta.wikimedia.org/w/rest.php/oauth2/access_token"
+WIKIMEDIA_OAUTH_PROFILE_URL = "https://meta.wikimedia.org/w/rest.php/oauth2/resource/profile"
+
+LOGIN_ERRORS = {
+    "not_configured": "Wikimedia sign-in is not configured on this server yet.",
+    "denied": "You cancelled the Wikimedia sign-in.",
+    "state": "That sign-in attempt expired. Please start again.",
+    "failed": "Wikimedia sign-in failed. Please try again.",
+}
+
+
+def oauth_configured():
+    """Login needs a client secret, unless PKCE was explicitly enabled."""
+    if not WIKIMEDIA_OAUTH_CLIENT_ID:
+        return False
+    return bool(WIKIMEDIA_OAUTH_CLIENT_SECRET) or WIKIMEDIA_OAUTH_USE_PKCE
+
+
+def oauth_redirect_uri():
+    """Callback URL that must exactly match the one registered for the consumer."""
+    return WIKIMEDIA_OAUTH_REDIRECT_URI or url_for("oauth_callback", _external=True)
+
+
+def pkce_pair():
+    """Return (code_verifier, code_challenge) for the PKCE S256 method."""
+    verifier = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    return verifier, challenge
+
+
+def safe_next(target):
+    """Only allow same-site relative paths as a post-login redirect."""
+    if isinstance(target, str) and target.startswith("/") and not target.startswith("//"):
+        return target
+    return url_for("home")
+
+
+@app.context_processor
+def inject_user():
+    return {"user": session.get("user")}
+
+
+@app.route("/login")
+def login():
+    if session.get("user"):
+        return redirect(url_for("home"))
+    return render_template(
+        "login.html",
+        oauth_configured=oauth_configured(),
+        error=LOGIN_ERRORS.get(request.args.get("error", "")),
+        next=safe_next(request.args.get("next")),
+    )
+
+
+@app.route("/oauth/login")
+def oauth_login():
+    if session.get("user"):
+        return redirect(url_for("home"))
+    if not oauth_configured():
+        return redirect(url_for("login", error="not_configured"))
+
+    state = secrets.token_urlsafe(32)
+    session["oauth_state"] = state
+    session["oauth_next"] = safe_next(request.args.get("next"))
+
+    params = {
+        "response_type": "code",
+        "client_id": WIKIMEDIA_OAUTH_CLIENT_ID,
+        "redirect_uri": oauth_redirect_uri(),
+        "state": state,
+    }
+
+    # Without a client secret we act as a public client, which needs PKCE.
+    if not WIKIMEDIA_OAUTH_CLIENT_SECRET:
+        verifier, challenge = pkce_pair()
+        session["oauth_code_verifier"] = verifier
+        params["code_challenge"] = challenge
+        params["code_challenge_method"] = "S256"
+
+    return redirect(f"{WIKIMEDIA_OAUTH_AUTHORIZE_URL}?{urlencode(params)}")
+
+
+@app.route("/oauth/callback")
+def oauth_callback():
+    error = request.args.get("error")
+    if error:
+        return redirect(url_for("login", error="denied" if error == "access_denied" else "failed"))
+
+    code = request.args.get("code", "")
+    state = request.args.get("state", "")
+    expected_state = session.pop("oauth_state", None)
+
+    if not code or not state or not expected_state or not secrets.compare_digest(state, expected_state):
+        app.logger.warning("OAuth callback rejected: code or state missing/mismatched.")
+        return redirect(url_for("login", error="state"))
+
+    payload = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": oauth_redirect_uri(),
+    }
+    auth = None
+    if WIKIMEDIA_OAUTH_CLIENT_SECRET:
+        auth = (WIKIMEDIA_OAUTH_CLIENT_ID, WIKIMEDIA_OAUTH_CLIENT_SECRET)
+    else:
+        payload["client_id"] = WIKIMEDIA_OAUTH_CLIENT_ID
+        verifier = session.pop("oauth_code_verifier", None)
+        if verifier:
+            payload["code_verifier"] = verifier
+            payload["code_challenge_method"] = "S256"
+
+    try:
+        token_response = requests.post(
+            WIKIMEDIA_OAUTH_TOKEN_URL,
+            data=payload,
+            auth=auth,
+            headers=WIKIDATA_HEADERS,
+            timeout=15,
+        )
+        token_response.raise_for_status()
+        access_token = (token_response.json() or {}).get("access_token")
+        if not access_token:
+            raise ValueError("token response did not contain an access_token")
+
+        profile_response = requests.get(
+            WIKIMEDIA_OAUTH_PROFILE_URL,
+            headers={**WIKIDATA_HEADERS, "Authorization": f"Bearer {access_token}"},
+            timeout=15,
+        )
+        profile_response.raise_for_status()
+        profile = profile_response.json() or {}
+    except Exception as e:
+        app.logger.warning("Wikimedia login failed: %s", e)
+        return redirect(url_for("login", error="failed"))
+
+    if not profile.get("username"):
+        app.logger.warning("Wikimedia profile response had no username.")
+        return redirect(url_for("login", error="failed"))
+
+    session.permanent = True
+    session["user"] = {
+        "id": profile.get("sub"),
+        "username": profile["username"],
+        "editcount": profile.get("editcount"),
+        "groups": profile.get("groups", []),
+        "blocked": bool(profile.get("blocked")),
+    }
+    app.logger.info("Wikimedia login succeeded for %s", profile["username"])
+
+    target = session.pop("oauth_next", None)
+    return redirect(safe_next(target))
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("home"))
 
 
 # ---------------------------------------------------
