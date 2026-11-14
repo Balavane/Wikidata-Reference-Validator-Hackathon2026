@@ -128,7 +128,7 @@ SECRET_KEY=<long random string>
 WIKIMEDIA_CLIENT_ID=a7d62252493d736604d7219ca46e4f05
 WIKIMEDIA_CLIENT_SECRET=         # required for this consumer
 WIKIMEDIA_USE_PKCE=false         # only for consumers registered without a secret
-WIKIMEDIA_REDIRECT_URI=http://127.0.0.1:5000/oauth/callback
+WIKIMEDIA_REDIRECT_URI=http://127.0.0.1:5000/login/callback
 SESSION_COOKIE_SECURE=false
 ```
 
@@ -140,11 +140,27 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 ### 2. Register the callback URL
 
-The consumer at
-[Special:OAuthConsumerRegistration](https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration/propose)
-must list the exact callback URL you use locally, e.g.
-`http://127.0.0.1:5000/oauth/callback`. If it does not match, Wikimedia will
-refuse the authorization request.
+Wikimedia only redirects to the callback URL that is **registered for the
+consumer** (exact match; prefix matching is disabled), so the two must be
+identical.
+
+The consumer for this project is registered with:
+
+```
+https://wikidata-reference-validator.toolforge.org/login/callback
+```
+
+That is the value to use on the Toolforge deployment:
+
+```dotenv
+WIKIMEDIA_REDIRECT_URI=https://wikidata-reference-validator.toolforge.org/login/callback
+```
+
+For local development, either deploy to Toolforge or register a separate
+consumer whose callback is `http://127.0.0.1:5000/login/callback` (use
+“Create new app based on this” on the consumer page, then put that consumer's
+key and secret in your local `.env`). The app serves both `/login/callback`
+and `/oauth/callback`, but the URL must match the registration exactly.
 
 ### 3. Client secret vs. PKCE
 
@@ -173,7 +189,7 @@ secret — both are git-ignored.
 | --- | --- |
 | `GET /login` | Sign-in page (shows an error notice when something fails) |
 | `GET /oauth/login` | Starts the flow and redirects to Wikimedia |
-| `GET /oauth/callback` | Exchanges the code, reads the profile, signs the user in |
+| `GET /login/callback` | Exchanges the code, reads the profile, signs the user in (`/oauth/callback` is kept as an alias) |
 | `POST /logout` | Clears the session |
 
 ---

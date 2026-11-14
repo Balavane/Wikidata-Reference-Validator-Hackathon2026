@@ -149,6 +149,21 @@ def auth_pkce_challenge(verifier):
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
+class CallbackRouteTests(unittest.TestCase):
+    def test_canonical_callback_path_matches_registration(self):
+        with app.app.test_request_context():
+            self.assertEqual(app.url_for("oauth_callback"), "/login/callback")
+
+    def test_legacy_callback_path_still_matches_the_same_view(self):
+        app.app.config["TESTING"] = True
+        client = app.app.test_client()
+        response = client.get("/oauth/callback?error=access_denied")
+
+        location = urlparse(response.headers["Location"])
+        self.assertEqual(location.path, "/login")
+        self.assertEqual(parse_qs(location.query)["error"], ["denied"])
+
+
 class PkceTests(unittest.TestCase):
     def test_verifier_and_challenge_are_valid(self):
         verifier, challenge = app.pkce_pair()
@@ -188,7 +203,7 @@ class OAuthCallbackTests(unittest.TestCase):
         self._start("/use")
 
         with patch.object(app, "WIKIMEDIA_OAUTH_CLIENT_SECRET", ""):
-            response = self.client.get("/oauth/callback?code=abc&state=expected-state")
+            response = self.client.get("/login/callback?code=abc&state=expected-state")
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(urlparse(response.headers["Location"]).path, "/use")
@@ -204,6 +219,7 @@ class OAuthCallbackTests(unittest.TestCase):
         self.assertEqual(payload["code"], "abc")
         self.assertEqual(payload["client_id"], app.WIKIMEDIA_OAUTH_CLIENT_ID)
         self.assertEqual(payload["code_verifier"], "verifier-value")
+        self.assertTrue(payload["redirect_uri"].endswith("/login/callback"))
         self.assertIsNone(post.call_args.kwargs["auth"])
         self.assertEqual(get.call_args.kwargs["headers"]["Authorization"], "Bearer tok")
 

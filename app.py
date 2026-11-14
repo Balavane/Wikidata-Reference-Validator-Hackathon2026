@@ -195,6 +195,7 @@ def oauth_login():
 
 
 @app.route("/oauth/callback")
+@app.route("/login/callback")
 def oauth_callback():
     error = request.args.get("error")
     if error:
