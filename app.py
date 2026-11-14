@@ -25,6 +25,49 @@ EXTERNAL_HEADERS = {
 
 
 # ---------------------------------------------------
+# LANGUAGES
+# ---------------------------------------------------
+# Languages offered in the UI. The template renders this list, so adding a
+# language here is all that is needed for it to appear in the picker.
+SUPPORTED_LANGUAGES = [
+    ("en", "English"),
+    ("fr", "French"),
+    ("es", "Spanish"),
+    ("de", "German"),
+    ("it", "Italian"),
+    ("pt", "Portuguese"),
+    ("sw", "Swahili"),
+    ("ar", "Arabic"),
+    ("zh", "Chinese"),
+    ("ja", "Japanese"),
+    ("nl", "Dutch"),
+]
+LANGUAGE_CODES = {code for code, _ in SUPPORTED_LANGUAGES}
+DEFAULT_LANGUAGE = "en"
+
+
+def normalize_language(language):
+    """Return a supported language code, falling back to English."""
+    if not isinstance(language, str):
+        return DEFAULT_LANGUAGE
+    code = language.strip().lower()
+    return code if code in LANGUAGE_CODES else DEFAULT_LANGUAGE
+
+
+def language_fallbacks(language):
+    """
+    Lookup order for labels: the requested language, then English, then the
+    language-neutral 'mul' term that Wikidata increasingly uses.
+    """
+    return list(dict.fromkeys([normalize_language(language), DEFAULT_LANGUAGE, "mul"]))
+
+
+@app.context_processor
+def inject_languages():
+    return {"languages": SUPPORTED_LANGUAGES, "default_language": DEFAULT_LANGUAGE}
+
+
+# ---------------------------------------------------
 # SOURCE CATEGORIES
 # ---------------------------------------------------
 # Heuristic grouping of reference URLs by the kind of site they point to.
@@ -152,10 +195,12 @@ def search():
     if not query:
         return jsonify([])
 
+    language = normalize_language(request.args.get("language"))
     params = {
         "action": "wbsearchentities",
         "search": query,
-        "language": "en",
+        "language": language,
+        "uselang": language,
         "format": "json",
         "limit": 8
     }
@@ -164,18 +209,29 @@ def search():
         r = requests.get(WIKIDATA_API, params=params, headers=WIKIDATA_HEADERS, timeout=10)
         r.raise_for_status()
         data = r.json()
-
-        results = []
-        for item in data.get("search", []):
-            results.append({
-                "id": item.get("id"),
-                "label": item.get("label") or item.get("id"),
-                "description": item.get("description", "")
-            })
-
-        return jsonify(results)
+        if not isinstance(data, dict):
+            raise ValueError("Unexpected search response")
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"[Search failed] {query}: {e}")
+        return jsonify({"error": "Wikidata search is temporarily unavailable."}), 502
+
+    items = [item for item in data.get("search", []) if isinstance(item, dict)]
+
+    # wbsearchentities only returns a label when one exists in the requested
+    # language, so fill the gaps from the fallback chain.
+    missing_labels = {item.get("id") for item in items if item.get("id") and not item.get("label")}
+    fallback_labels = fetch_labels(missing_labels, language) if missing_labels else {}
+
+    results = []
+    for item in items:
+        item_id = item.get("id")
+        results.append({
+            "id": item_id,
+            "label": item.get("label") or fallback_labels.get(item_id) or item_id,
+            "description": item.get("description", "")
+        })
+
+    return jsonify(results)
 
 
 # ---------------------------------------------------
@@ -277,21 +333,23 @@ def extract_statement_value(mainsnak, all_ids_to_label):
     return ""
 
 
-def pick_label(terms, fallback=""):
-    """Pick the English term, falling back to the language-neutral 'mul' term Wikidata now uses."""
-    for lang in ("en", "mul"):
+def pick_label(terms, fallback="", language=DEFAULT_LANGUAGE):
+    """Pick the term in the requested language, then English, then 'mul'."""
+    for lang in language_fallbacks(language):
         value = (terms or {}).get(lang, {}).get("value")
         if value:
             return value
     return fallback
 
 
-def fetch_labels(ids):
+def fetch_labels(ids, language=DEFAULT_LANGUAGE):
     labels = {}
     if not ids:
         return labels
 
-    id_list = list(ids)
+    language = normalize_language(language)
+    languages = "|".join(language_fallbacks(language))
+    id_list = sorted(set(ids))
     chunks = [id_list[i:i + 50] for i in range(0, len(id_list), 50)]
 
     for chunk in chunks:
@@ -300,7 +358,7 @@ def fetch_labels(ids):
             "ids": "|".join(chunk),
             "format": "json",
             "props": "labels",
-            "languages": "en|mul"
+            "languages": languages
         }
 
         try:
@@ -309,7 +367,8 @@ def fetch_labels(ids):
             entities = r.json().get("entities", {})
 
             for eid, data in entities.items():
-                label = pick_label(data.get("labels"))
+                label = pick_label(data.get("labels") if isinstance(data, dict) else None,
+                                   language=language)
                 if label:
                     labels[eid] = label
 
@@ -319,7 +378,7 @@ def fetch_labels(ids):
     return labels
 
 
-def resolve_qid_from_query(query_str):
+def resolve_qid_from_query(query_str, language=DEFAULT_LANGUAGE):
     """
     If user typed a raw QID (e.g. 'Q937') or a search term without clicking autocomplete,
     resolve it to a valid QID.
@@ -328,10 +387,12 @@ def resolve_qid_from_query(query_str):
     if re.match(r"^[Qq]\d+$", cleaned):
         return cleaned.upper()
 
+    language = normalize_language(language)
     params = {
         "action": "wbsearchentities",
         "search": cleaned,
-        "language": "en",
+        "language": language,
+        "uselang": language,
         "format": "json",
         "limit": 1
     }
@@ -357,8 +418,10 @@ def validate_references():
     if not target_input:
         return jsonify({"error": "Please enter a Wikidata item name or QID (e.g., Q937)."}), 400
 
+    language = normalize_language(data.get("language"))
+
     try:
-        qid = resolve_qid_from_query(target_input)
+        qid = resolve_qid_from_query(target_input, language)
         if not qid:
             return jsonify({"error": f"Could not find a Wikidata item matching '{target_input}'."}), 404
 
@@ -376,8 +439,8 @@ def validate_references():
         if not entity or "missing" in entity:
             return jsonify({"error": f"Wikidata item '{qid}' does not exist."}), 404
 
-        entity_label = pick_label(entity.get("labels"), qid)
-        entity_desc = pick_label(entity.get("descriptions"))
+        entity_label = pick_label(entity.get("labels"), qid, language)
+        entity_desc = pick_label(entity.get("descriptions"), "", language)
         claims = entity.get("claims", {})
 
         refs_data = []
@@ -411,7 +474,8 @@ def validate_references():
             return jsonify({
                 "message": f"No external URL references found on {entity_label} ({qid}).",
                 "qid": qid,
-                "label": entity_label
+                "label": entity_label,
+                "language": language
             }), 200
 
         # Deduplicate URLs so we only check each unique URL once
@@ -435,7 +499,7 @@ def validate_references():
                 return status_map, wayback_map
 
         status_map, wayback_map = asyncio.run(run_checks())
-        labels = fetch_labels(all_ids_to_label)
+        labels = fetch_labels(all_ids_to_label, language)
 
         results = []
         for ref_data in refs_data:
@@ -468,6 +532,7 @@ def validate_references():
             "qid": qid,
             "label": entity_label,
             "description": entity_desc,
+            "language": language,
             "references": results
         })
 
