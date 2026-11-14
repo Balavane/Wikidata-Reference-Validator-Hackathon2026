@@ -1,5 +1,65 @@
 /**************************************
- * AUTOCOMPLETE SEARCH (UNCHANGED FLOW)
+ * SKELETON HELPERS
+ **************************************/
+
+/** Renders N skeleton suggestion rows into the suggestions dropdown */
+function showSuggestionSkeletons(count = 3) {
+  const suggestions = document.getElementById("suggestions");
+  suggestions.innerHTML = "";
+  for (let i = 0; i < count; i++) {
+    const li = document.createElement("li");
+    li.className = "skeleton-suggestion";
+    li.innerHTML = `
+      <div class="skeleton skeleton-line w80 mb-1"></div>
+      <div class="skeleton skeleton-line w60" style="height:11px;opacity:0.7"></div>
+    `;
+    suggestions.appendChild(li);
+  }
+}
+
+/** Renders a full results skeleton (card + N list rows) */
+function showResultsSkeleton(rowCount = 5) {
+  const resultDiv = document.getElementById("result");
+  let rows = "";
+  for (let i = 0; i < rowCount; i++) {
+    rows += `
+      <div class="skeleton-row">
+        <div class="skeleton skeleton-row-url"></div>
+        <div class="d-flex gap-2">
+          <div class="skeleton skeleton-row-badge"></div>
+          <div class="skeleton skeleton-row-btn"></div>
+        </div>
+      </div>`;
+  }
+  resultDiv.innerHTML = `
+    <div class="skeleton-card">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex gap-2">
+          <div class="skeleton skeleton-btn"></div>
+          <div class="skeleton skeleton-btn"></div>
+        </div>
+        <div class="skeleton skeleton-line w60" style="height:20px;width:200px"></div>
+      </div>
+      <div class="mb-3">
+        <div class="skeleton skeleton-badge"></div>
+        <div class="skeleton skeleton-badge"></div>
+      </div>
+      ${rows}
+    </div>`;
+}
+
+/** Fade-in helper: wraps real HTML then applies the CSS animation */
+function fadeIn(element, html) {
+  element.innerHTML = html;
+  element.querySelectorAll(".fade-in-content").forEach(el => {
+    el.style.animation = "none";
+    el.getBoundingClientRect();
+    el.style.animation = "";
+  });
+}
+
+/**************************************
+ * AUTOCOMPLETE SEARCH
  **************************************/
 document.getElementById("search").addEventListener("input", async function () {
   const query = this.value;
@@ -8,6 +68,9 @@ document.getElementById("search").addEventListener("input", async function () {
 
   if (query.length < 3) return;
 
+  // Show skeleton suggestions immediately while fetching
+  showSuggestionSkeletons(3);
+
   const response = await fetch(
     `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(
       query
@@ -15,11 +78,12 @@ document.getElementById("search").addEventListener("input", async function () {
   );
   const data = await response.json();
 
+  // Clear skeletons and populate with real data
+  suggestions.innerHTML = "";
   data.search.forEach(item => {
     const li = document.createElement("li");
-    li.className = "list-group-item list-group-item-action";
+    li.className = "list-group-item list-group-item-action fade-in-content";
 
-    // label + description (Wikidata-style)
     li.innerHTML = `
       <div>
         <strong>${item.label}</strong>
@@ -62,7 +126,7 @@ async function getPropertyLabel(pid) {
 }
 
 /**************************************
- * VALIDATE REFERENCES (FIXED + SAFE)
+ * VALIDATE REFERENCES
  **************************************/
 async function validate() {
   const input = document.getElementById("search");
@@ -71,36 +135,10 @@ async function validate() {
   const resultDiv = document.getElementById("result");
   const searchSection = document.getElementById("searchSection");
 
-  // if (!qid && !label) {
-  //   resultDiv.innerHTML = `
-  //     <div class="alert alert-warning">
-  //       <i class="bi bi-exclamation-triangle"></i>
-  //       Please type a label or select an item first.
-  //     </div>`;
-  //   return;
-  // }
-
   searchSection.style.display = "none";
 
-  let remaining = 30;
-  resultDiv.innerHTML = `
-    <div class="d-flex flex-column align-items-center justify-content-center my-5">
-      <div class="fancy-loader"></div>
-      <p class="mt-3 text-light fw-bold">...</p>
-      <p id="countdownTimer" class="text-info small">
-        Estimated time: ${remaining}s
-      </p>
-    </div>
-  `;
-
-  const countdownInterval = setInterval(() => {
-    remaining--;
-    const el = document.getElementById("countdownTimer");
-    if (el) {
-      el.textContent =
-        remaining > 0 ? `Estimated time: ${remaining}s` : "Finalizing...";
-    }
-  }, 1000);
+  // ── Show skeleton immediately ──
+  showResultsSkeleton(6);
 
   const start = Date.now();
 
@@ -112,37 +150,36 @@ async function validate() {
     });
 
     const data = await response.json();
-    clearInterval(countdownInterval);
     const duration = Math.floor((Date.now() - start) / 1000);
 
     if (data.error) {
-      resultDiv.innerHTML = `
-        <div class="card p-4 text-center">
+      fadeIn(resultDiv, `
+        <div class="card p-4 text-center fade-in-content">
           <div class="alert alert-danger">
             <i class="bi bi-x-circle"></i> ${data.error}
           </div>
           <p class="small text-muted">Completed in ${duration}s</p>
           <button class="btn btn-lg btn-glass-action mt-3"
                   onclick="resetSearch()">🔄 Search Another Item</button>
-        </div>`;
+        </div>`);
       return;
     }
 
     if (data.message) {
-      resultDiv.innerHTML = `
-        <div class="card p-4 text-center">
+      fadeIn(resultDiv, `
+        <div class="card p-4 text-center fade-in-content">
           <div class="alert alert-info">
             <i class="bi bi-info-circle"></i> ${data.message}
           </div>
           <p class="small text-muted">Completed in ${duration}s</p>
           <button class="btn btn-lg btn-glass-action mt-3"
                   onclick="resetSearch()">🔄 Search Another Item</button>
-        </div>`;
+        </div>`);
       return;
     }
 
     const aliveCount = data.filter(r => r.status === "alive").length;
-    const deadCount = data.filter(r => r.status === "dead").length;
+    const deadCount  = data.filter(r => r.status === "dead").length;
 
     localStorage.setItem("reportData", JSON.stringify({
       qid: qid || label,
@@ -154,7 +191,7 @@ async function validate() {
     }));
 
     let html = `
-      <div class="card p-4">
+      <div class="card p-4 fade-in-content">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <div class="d-flex gap-2">
             <button id="viewReportBtn" class="btn btn-info btn-sm">
@@ -185,8 +222,8 @@ async function validate() {
     `;
 
     data.forEach((ref, i) => {
-      const badge = ref.status === "alive" ? "success" : "danger";
-      const icon = ref.status === "alive" ? "check-circle" : "x-octagon";
+      const badge      = ref.status === "alive" ? "success" : "danger";
+      const icon       = ref.status === "alive" ? "check-circle" : "x-octagon";
       const collapseId = `collapseRef${i}`;
 
       html += `
@@ -217,38 +254,32 @@ async function validate() {
 
               ${
                 ref.status === "dead"
-                  ? `
-                    <div class="mt-2 alert alert-warning p-2 mb-1">
+                  ? `<div class="mt-2 alert alert-warning p-2 mb-1">
                       <i class="bi bi-exclamation-triangle me-1"></i>
                       <strong>Reference unavailable.</strong>
                       Please review or update this reference.
-                    </div>
-                  `
+                    </div>`
                   : ""
               }
 
               ${
                 ref.status === "dead" && ref.suggestedArchive
-                  ? `
-                    <div class="mt-2 small">
+                  ? `<div class="mt-2 small">
                       🔁 <strong>Suggested archived version:</strong>
                       <a href="${ref.suggestedArchive.archiveUrl}"
                          target="_blank"
                          class="fw-semibold link-primary">
                         View on Wayback Machine
                       </a>
-                    </div>
-                  `
+                    </div>`
                   : ""
               }
 
               ${
                 ref.status === "dead" && !ref.suggestedArchive
-                  ? `
-                    <div class="mt-2 small text-muted">
+                  ? `<div class="mt-2 small text-muted">
                       📭 No archived snapshot found on Wayback Machine.
-                    </div>
-                  `
+                    </div>`
                   : ""
               }
             </div>
@@ -267,22 +298,22 @@ async function validate() {
       </div>
     `;
 
-    resultDiv.innerHTML = html;
+    // ── Fade in real content (replaces skeleton) ──
+    fadeIn(resultDiv, html);
 
     document.getElementById("viewReportBtn").onclick = () => {
       window.open("/report", "_blank");
     };
 
   } catch (err) {
-    clearInterval(countdownInterval);
-    resultDiv.innerHTML = `
-      <div class="card p-4 text-center">
+    fadeIn(resultDiv, `
+      <div class="card p-4 text-center fade-in-content">
         <div class="alert alert-danger">
           <i class="bi bi-bug"></i> Error: ${err}
         </div>
         <button class="btn btn-lg btn-glass-action mt-3"
                 onclick="resetSearch()">🔄 Search Another Item</button>
-      </div>`;
+      </div>`);
   }
 }
 

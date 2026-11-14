@@ -169,6 +169,117 @@ body {
   100% { transform: rotate(360deg); }
 }
 
+/* ============================================
+   SKELETON LOADERS
+   ============================================ */
+
+/* Shimmer animation base */
+@keyframes shimmer {
+  0%   { background-position: -800px 0; }
+  100% { background-position:  800px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.08) 25%,
+    rgba(255,255,255,0.22) 37%,
+    rgba(255,255,255,0.08) 63%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite linear;
+  border-radius: 6px;
+}
+
+/* Text line skeletons */
+.skeleton-line {
+  height: 14px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+}
+.skeleton-line.full  { width: 100%; }
+.skeleton-line.w80   { width: 80%; }
+.skeleton-line.w60   { width: 60%; }
+.skeleton-line.w40   { width: 40%; }
+
+/* Badge skeleton */
+.skeleton-badge {
+  display: inline-block;
+  height: 24px;
+  width: 80px;
+  border-radius: 20px;
+  margin-right: 8px;
+}
+
+/* Button skeleton */
+.skeleton-btn {
+  height: 36px;
+  width: 130px;
+  border-radius: 20px;
+  display: inline-block;
+}
+
+/* Card skeleton wrapper */
+.skeleton-card {
+  background: rgba(255,255,255,0.08);
+  border-radius: 1rem;
+  border: 1px solid rgba(255,255,255,0.15);
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+/* Row skeleton (simulates a list-group-item) */
+.skeleton-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.skeleton-row-url {
+  height: 14px;
+  width: 55%;
+  border-radius: 4px;
+}
+.skeleton-row-badge {
+  height: 24px;
+  width: 70px;
+  border-radius: 20px;
+}
+.skeleton-row-btn {
+  height: 28px;
+  width: 65px;
+  border-radius: 6px;
+}
+
+/* Search suggestions skeleton */
+.skeleton-suggestion {
+  padding: 10px 15px;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.skeleton-suggestion .skeleton-line {
+  background: linear-gradient(
+    90deg,
+    #e0e0e0 25%,
+    #f0f0f0 37%,
+    #e0e0e0 63%
+  );
+  background-size: 800px 100%;
+}
+
+/* Fade-in transition for real content */
+.fade-in-content {
+  opacity: 0;
+  animation: fadeInContent 0.5s ease forwards;
+}
+@keyframes fadeInContent {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
 /* === Results section === */
 #result .card {
   background: rgba(120, 184, 118, 0.98);
