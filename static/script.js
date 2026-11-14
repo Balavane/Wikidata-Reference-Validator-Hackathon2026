@@ -48,6 +48,25 @@ function showResultsSkeleton(rowCount = 5) {
     </div>`;
 }
 
+/** Format timestamp helper (e.g. 20210412153000 -> 2021-04-12 15:30:00) */
+function formatTimestamp(ts) {
+  if (!ts) return "";
+  const s = String(ts);
+  if (s.length >= 8) {
+    const y = s.substring(0, 4);
+    const m = s.substring(4, 6);
+    const d = s.substring(6, 8);
+    if (s.length >= 14) {
+      const hh = s.substring(8, 10);
+      const mm = s.substring(10, 12);
+      const ss = s.substring(12, 14);
+      return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+    }
+    return `${y}-${m}-${d}`;
+  }
+  return s;
+}
+
 /** Fade-in helper: wraps real HTML then applies the CSS animation */
 function fadeIn(element, html) {
   element.innerHTML = html;
@@ -312,10 +331,15 @@ async function validate() {
                   ? `<div class="mt-2 p-2 border border-warning rounded bg-white">
                       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div class="me-2 text-break" style="max-width: 70%;">
-                          <span class="text-dark fw-bold"><i class="bi bi-archive-fill text-warning me-1"></i>URL Archivée suggérée :</span><br>
-                          <a href="${ref.suggestedArchive.archiveUrl}" target="_blank" class="fw-semibold link-primary" id="archive-link-${i}">
-                            ${ref.suggestedArchive.archiveUrl}
+                          <span class="text-dark fw-bold"><i class="bi bi-archive-fill text-warning me-1"></i>Suggested archived version:</span><br>
+                          <a href="${ref.suggestedArchive.archiveUrl}" target="_blank" rel="noopener noreferrer" class="fw-semibold link-primary" id="archive-link-${i}">
+                            View on Wayback Machine <i class="bi bi-box-arrow-up-right small"></i>
                           </a>
+                          ${
+                            ref.suggestedArchive.timestamp
+                              ? `<div class="small text-muted mt-1">📅 <strong>Snapshot Date:</strong> ${formatTimestamp(ref.suggestedArchive.timestamp)}</div>`
+                              : ""
+                          }
                         </div>
                         <div class="d-flex gap-2">
                           <button class="btn btn-sm btn-outline-primary" id="copy-btn-${i}" onclick="copyArchiveUrl(${i}, this)" title="Copier le lien archivé">
