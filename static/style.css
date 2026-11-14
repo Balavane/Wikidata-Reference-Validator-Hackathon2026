@@ -1220,8 +1220,6 @@ body:not(.page-home) .site-header { border-bottom-color: var(--border); }
 }
 .auth__actions .btn-solid,
 .auth__actions .btn-ghost { text-decoration: none; }
-.auth__note { margin-top: 32px; color: var(--text-muted); font-size: 0.95rem; }
-.auth__note p { margin: 0; }
 
 .prose { font-size: 1.02rem; line-height: 1.75; }
 .prose h2 {

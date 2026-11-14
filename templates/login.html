@@ -8,11 +8,7 @@
 <article class="page auth">
   <p class="page__eyebrow">Account</p>
   <h1 class="page__title">Log in</h1>
-  <p class="page__tagline">
-    Sign in with your Wikimedia account. The app only reads your basic public profile
-    (username, account ID, edit count and groups), so no password ever reaches this server
-    and nothing is edited on your behalf.
-  </p>
+  <p class="page__tagline">Sign in with your Wikimedia account.</p>
 
   {% if error %}
     <div class="notice notice--error" role="alert">
@@ -30,15 +26,6 @@
         Sign in with Wikimedia
       </a>
       <a class="btn-ghost" href="{{ url_for('home') }}">Continue without an account</a>
-    </div>
-
-    <div class="prose auth__note">
-      <p>
-        You will be sent to <code>meta.wikimedia.org</code> to approve the request, then returned here.
-        You can revoke access at any time from
-        <a href="https://meta.wikimedia.org/wiki/Special:OAuthManageMyGrants" target="_blank" rel="noopener">your
-        connected apps</a>.
-      </p>
     </div>
   {% else %}
     <div class="notice" role="status">
