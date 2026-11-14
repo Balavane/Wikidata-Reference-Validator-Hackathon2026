@@ -43,9 +43,10 @@ function setLanguage(code) {
 /** Mirror the selected option into the visible pill text. */
 function syncLanguageLabel() {
   const option = els.language?.options[els.language.selectedIndex];
-  document.querySelectorAll("[data-language-value]").forEach(el => {
-    el.textContent = option ? option.text : "English";
-  });
+  const name = option ? option.text : "English";
+  const code = option ? option.value.toUpperCase() : "EN";
+  document.querySelectorAll("[data-language-value]").forEach(el => { el.textContent = name; });
+  document.querySelectorAll("[data-language-code]").forEach(el => { el.textContent = code; });
 }
 
 function rememberLanguage(code) {
@@ -223,15 +224,6 @@ els.form.addEventListener("submit", e => {
   } else {
     validate(null, typed);
   }
-});
-
-document.querySelectorAll("[data-example-qid]").forEach(btn => {
-  btn.addEventListener("click", () => {
-    els.input.value = btn.dataset.exampleLabel;
-    els.clear.hidden = false;
-    state.selected = { qid: btn.dataset.exampleQid, label: btn.dataset.exampleLabel };
-    validate(state.selected.qid, state.selected.label);
-  });
 });
 
 els.language?.addEventListener("change", () => {

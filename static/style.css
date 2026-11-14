@@ -548,41 +548,31 @@ body:not(.page-home) .site-header { border-bottom-color: var(--border); }
   font-size: 0.75rem;
 }
 
-.hero__examples {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 18px;
-}
-
-/* Language picker, sitting just under the search bar */
-.search-options {
-  display: flex;
-  justify-content: center;
-  margin-top: 14px;
-}
-
+/* Language picker, sitting inside the search bar next to the submit button */
 .lang {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 30px 5px 12px;
-  border: 1px solid var(--border);
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 6px 22px 6px 9px;
+  border: 1px solid transparent;
   border-radius: var(--radius-pill);
   color: var(--text-muted);
   font-size: 0.82rem;
+  line-height: 1;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.lang:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface-2); }
+.lang:hover { color: var(--text); background: var(--surface-hover); }
 .lang:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--glow); }
 
 .lang__icon { font-size: 0.95rem; color: var(--text-faint); }
 .lang:hover .lang__icon { color: inherit; }
 
 .lang__value { font-weight: 500; }
+/* Short code is shown instead of the full name on narrow screens */
+.lang__code { display: none; font-weight: 500; letter-spacing: 0.04em; }
 
 /* Transparent select covering the whole pill, so a click anywhere opens it */
 .lang__select {
@@ -601,7 +591,7 @@ body:not(.page-home) .site-header { border-bottom-color: var(--border); }
 
 .lang__caret {
   position: absolute;
-  right: 12px;
+  right: 8px;
   font-size: 0.7rem;
   pointer-events: none;
   color: var(--text-faint);
@@ -639,11 +629,9 @@ body:not(.page-home) .site-header { border-bottom-color: var(--border); }
 .has-results .hero__glow,
 .has-results .hero__title,
 .has-results .hero__lead,
-.has-results .hero__meta,
-.has-results .hero__examples { display: none; }
+.has-results .hero__meta { display: none; }
 .has-results .search__field { min-height: 50px; padding: 5px 5px 5px 18px; box-shadow: none; }
 .has-results .search__submit { width: 38px; height: 38px; }
-.has-results .search-options { margin-top: 10px; }
 
 /* =========================================================
    Loading, notices, empty states
@@ -1385,6 +1373,8 @@ body:not(.page-home) .site-header { border-bottom-color: var(--border); }
 
 @media (max-width: 640px) {
   .brand__name { display: none; }
+  .lang__value { display: none; }
+  .lang__code { display: inline; }
 }
 
 @media (max-width: 460px) {
