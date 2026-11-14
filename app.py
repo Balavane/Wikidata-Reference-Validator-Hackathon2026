@@ -37,7 +37,7 @@ def report():
 
 @app.route("/search")
 def search():
-    query = request.args.get("q")
+    query = request.args.get("q", "").strip()
     if not query:
         return jsonify([])
 
@@ -48,18 +48,23 @@ def search():
         "format": "json"
     }
 
-    r = requests.get(WIKIDATA_API, params=params)
-    data = r.json()
+    try:
+        r = requests.get(WIKIDATA_API, params=params, headers=HEADERS, timeout=10)
+        r.raise_for_status()
+        data = r.json()
 
-    results = []
-    for item in data.get("search", []):
-        results.append({
-            "id": item.get("id"),
-            "label": item.get("label"),
-            "description": item.get("description", "")
-        })
+        results = []
+        for item in data.get("search", []):
+            results.append({
+                "id": item.get("id"),
+                "label": item.get("label"),
+                "description": item.get("description", "")
+            })
 
-    return jsonify(results)
+        return jsonify(results)
+    except Exception as e:
+        print(f"[Search error] {e}")
+        return jsonify({"error": "Failed to fetch search results from Wikidata."}), 502
 
 
 # ---------------------------------------------------

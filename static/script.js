@@ -59,10 +59,10 @@ function fadeIn(element, html) {
 }
 
 /**************************************
- * AUTOCOMPLETE SEARCH
+ * AUTOCOMPLETE SEARCH (CENTRALIZED VIA FLASK /search)
  **************************************/
 document.getElementById("search").addEventListener("input", async function () {
-  const query = this.value;
+  const query = this.value.trim();
   const suggestions = document.getElementById("suggestions");
   suggestions.innerHTML = "";
 
@@ -71,36 +71,56 @@ document.getElementById("search").addEventListener("input", async function () {
   // Show skeleton suggestions immediately while fetching
   showSuggestionSkeletons(3);
 
-  const response = await fetch(
-    `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(
-      query
-    )}&language=en&format=json&origin=*`
-  );
-  const data = await response.json();
+  try {
+    const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
 
-  // Clear skeletons and populate with real data
-  suggestions.innerHTML = "";
-  data.search.forEach(item => {
-    const li = document.createElement("li");
-    li.className = "list-group-item list-group-item-action fade-in-content";
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || "Erreur lors de la recherche.");
+    }
 
-    li.innerHTML = `
-      <div>
-        <strong>${item.label}</strong>
-        <div class="small text-muted">${item.description || ""}</div>
-      </div>
+    const items = await response.json();
+
+    // Clear skeletons and populate with real data
+    suggestions.innerHTML = "";
+
+    if (!Array.isArray(items) || items.length === 0) {
+      const emptyLi = document.createElement("li");
+      emptyLi.className = "list-group-item text-muted small p-3";
+      emptyLi.innerHTML = `<i class="bi bi-info-circle me-1"></i> Aucun résultat trouvé pour "<strong>${query}</strong>"`;
+      suggestions.appendChild(emptyLi);
+      return;
+    }
+
+    items.forEach(item => {
+      const li = document.createElement("li");
+      li.className = "list-group-item list-group-item-action fade-in-content";
+
+      li.innerHTML = `
+        <div>
+          <strong>${item.label || item.id}</strong>
+          ${item.id ? `<span class="badge bg-secondary ms-1 small">${item.id}</span>` : ""}
+          <div class="small text-muted">${item.description || ""}</div>
+        </div>
+      `;
+
+      li.onclick = () => {
+        const input = document.getElementById("search");
+        input.value = item.label || item.id;
+        input.setAttribute("data-qid", item.id);
+        input.setAttribute("data-label", item.label || item.id);
+        suggestions.innerHTML = "";
+      };
+
+      suggestions.appendChild(li);
+    });
+  } catch (err) {
+    suggestions.innerHTML = `
+      <li class="list-group-item list-group-item-danger p-2 small">
+        <i class="bi bi-exclamation-triangle me-1"></i> ${err.message || "Impossible de contacter le serveur pour la recherche."}
+      </li>
     `;
-
-    li.onclick = () => {
-      const input = document.getElementById("search");
-      input.value = item.label;
-      input.setAttribute("data-qid", item.id);
-      input.setAttribute("data-label", item.label);
-      suggestions.innerHTML = "";
-    };
-
-    suggestions.appendChild(li);
-  });
+  }
 });
 
 /**************************************
