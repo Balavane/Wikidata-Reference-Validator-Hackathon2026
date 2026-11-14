@@ -130,10 +130,28 @@ async function getPropertyLabel(pid) {
  **************************************/
 async function validate() {
   const input = document.getElementById("search");
-  const qid = input.getAttribute("data-qid");
+  let qid = input.getAttribute("data-qid");
+  const val = input.value.trim();
+  if (!qid && /^Q\d+$/i.test(val)) {
+    qid = val.toUpperCase();
+  }
+
   const label = input.getAttribute("data-label") || input.value;
   const resultDiv = document.getElementById("result");
   const searchSection = document.getElementById("searchSection");
+
+  if (!qid) {
+    searchSection.style.display = "none";
+    resultDiv.innerHTML = `
+      <div class="card p-4 text-center fade-in-content">
+        <div class="alert alert-warning mb-3">
+          <i class="bi bi-exclamation-triangle"></i>
+          Veuillez sélectionner un élément dans la liste des suggestions (ou saisir un identifiant Wikidata comme <strong>Q42</strong> ou <strong>Q937</strong>).
+        </div>
+        <button class="btn btn-lg btn-glass-action" onclick="resetSearch()">🔄 Réessayer</button>
+      </div>`;
+    return;
+  }
 
   searchSection.style.display = "none";
 
@@ -181,6 +199,8 @@ async function validate() {
     const aliveCount = data.filter(r => r.status === "alive").length;
     const deadCount  = data.filter(r => r.status === "dead").length;
 
+    window.currentResults = data;
+
     localStorage.setItem("reportData", JSON.stringify({
       qid: qid || label,
       label,
@@ -210,10 +230,10 @@ async function validate() {
         </div>
 
         <p>
-          <span class="badge bg-success">
+          <span class="badge bg-success" id="aliveCountBadge">
             <i class="bi bi-check-circle"></i> Alive: ${aliveCount}
           </span>
-          <span class="badge bg-danger ms-2">
+          <span class="badge bg-danger ms-2" id="deadCountBadge">
             <i class="bi bi-x-octagon"></i> Dead: ${deadCount}
           </span>
         </p>
@@ -225,15 +245,17 @@ async function validate() {
       const badge      = ref.status === "alive" ? "success" : "danger";
       const icon       = ref.status === "alive" ? "check-circle" : "x-octagon";
       const collapseId = `collapseRef${i}`;
+      const hasArchive = ref.status === "dead" && ref.suggestedArchive;
 
       html += `
-        <li class="list-group-item p-3 rounded shadow-sm mb-2">
+        <li class="list-group-item p-3 rounded shadow-sm mb-2" id="ref-item-${i}">
           <div class="d-flex justify-content-between align-items-center gap-2">
-            <a href="${ref.url}" target="_blank" class="ref-link text-break">
+            <a href="${ref.url}" target="_blank" class="ref-link text-break" id="ref-link-${i}">
               ${ref.url}
             </a>
             <div class="d-flex align-items-center gap-2">
-              <span class="badge bg-${badge}">
+              ${hasArchive ? `<span class="badge bg-warning text-dark" id="archive-pill-${i}"><i class="bi bi-clock-history"></i> Archive</span>` : ""}
+              <span class="badge bg-${badge}" id="ref-badge-${i}">
                 <i class="bi bi-${icon} me-1"></i> ${ref.status}
               </span>
               <button class="btn btn-sm btn-outline-secondary"
@@ -253,32 +275,37 @@ async function validate() {
               </div>
 
               ${
-                ref.status === "dead"
+                ref.status === "dead" && !hasArchive
                   ? `<div class="mt-2 alert alert-warning p-2 mb-1">
                       <i class="bi bi-exclamation-triangle me-1"></i>
                       <strong>Reference unavailable.</strong>
                       Please review or update this reference.
-                    </div>`
-                  : ""
-              }
-
-              ${
-                ref.status === "dead" && ref.suggestedArchive
-                  ? `<div class="mt-2 small">
-                      🔁 <strong>Suggested archived version:</strong>
-                      <a href="${ref.suggestedArchive.archiveUrl}"
-                         target="_blank"
-                         class="fw-semibold link-primary">
-                        View on Wayback Machine
-                      </a>
-                    </div>`
-                  : ""
-              }
-
-              ${
-                ref.status === "dead" && !ref.suggestedArchive
-                  ? `<div class="mt-2 small text-muted">
+                    </div>
+                    <div class="mt-2 small text-muted">
                       📭 No archived snapshot found on Wayback Machine.
+                    </div>`
+                  : ""
+              }
+
+              ${
+                hasArchive
+                  ? `<div class="mt-2 p-2 border border-warning rounded bg-white">
+                      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="me-2 text-break" style="max-width: 70%;">
+                          <span class="text-dark fw-bold"><i class="bi bi-archive-fill text-warning me-1"></i>URL Archivée suggérée :</span><br>
+                          <a href="${ref.suggestedArchive.archiveUrl}" target="_blank" class="fw-semibold link-primary" id="archive-link-${i}">
+                            ${ref.suggestedArchive.archiveUrl}
+                          </a>
+                        </div>
+                        <div class="d-flex gap-2">
+                          <button class="btn btn-sm btn-outline-primary" id="copy-btn-${i}" onclick="copyArchiveUrl(${i}, this)" title="Copier le lien archivé">
+                            📋 Copier
+                          </button>
+                          <button class="btn btn-sm btn-success" id="replace-btn-${i}" onclick="replaceWithArchive(${i})" title="Remplacer par la version archivée">
+                            🔄 Remplacer
+                          </button>
+                        </div>
+                      </div>
                     </div>`
                   : ""
               }
@@ -345,3 +372,82 @@ function resetSearch() {
   document.getElementById("result").innerHTML = "";
   searchSection.style.display = "block";
 }
+
+/**************************************
+ * ARCHIVE UTILITIES (COPY & REPLACE)
+ **************************************/
+window.copyArchiveUrl = function (index, btn) {
+  const ref = window.currentResults && window.currentResults[index];
+  if (!ref || !ref.suggestedArchive) return;
+  const url = ref.suggestedArchive.archiveUrl;
+
+  navigator.clipboard.writeText(url).then(() => {
+    const origText = btn.innerHTML;
+    btn.innerHTML = "✅ Copié !";
+    btn.classList.remove("btn-outline-primary");
+    btn.classList.add("btn-success");
+    setTimeout(() => {
+      btn.innerHTML = origText;
+      btn.classList.remove("btn-success");
+      btn.classList.add("btn-outline-primary");
+    }, 2000);
+  }).catch(() => {
+    prompt("Copiez l'URL archivée ci-dessous :", url);
+  });
+};
+
+window.replaceWithArchive = function (index) {
+  const ref = window.currentResults && window.currentResults[index];
+  if (!ref || !ref.suggestedArchive) return;
+  const archiveUrl = ref.suggestedArchive.archiveUrl;
+
+  // Mettre à jour l'objet de données
+  ref.originalUrl = ref.originalUrl || ref.url;
+  ref.url = archiveUrl;
+  ref.status = "alive";
+  ref.isReplaced = true;
+
+  // Mettre à jour le lien dans l'affichage
+  const linkEl = document.getElementById(`ref-link-${index}`);
+  if (linkEl) {
+    linkEl.href = archiveUrl;
+    linkEl.textContent = archiveUrl;
+  }
+
+  // Mettre à jour le badge de statut
+  const badgeEl = document.getElementById(`ref-badge-${index}`);
+  if (badgeEl) {
+    badgeEl.className = "badge bg-success";
+    badgeEl.innerHTML = `<i class="bi bi-check-circle me-1"></i> alive (archivé)`;
+  }
+
+  // Mettre à jour le pillule d'archive
+  const pillEl = document.getElementById(`archive-pill-${index}`);
+  if (pillEl) {
+    pillEl.className = "badge bg-info text-dark";
+    pillEl.innerHTML = `<i class="bi bi-shield-check"></i> Remplacé`;
+  }
+
+  // Mettre à jour le bouton de remplacement
+  const replaceBtn = document.getElementById(`replace-btn-${index}`);
+  if (replaceBtn) {
+    replaceBtn.disabled = true;
+    replaceBtn.className = "btn btn-sm btn-secondary";
+    replaceBtn.innerHTML = "✅ Remplacé";
+  }
+
+  // Mettre à jour localStorage pour que la page de rapport / export prenne en compte le lien archivé
+  const raw = localStorage.getItem("reportData");
+  if (raw) {
+    const report = JSON.parse(raw);
+    report.references = window.currentResults;
+    report.aliveCount = window.currentResults.filter(r => r.status === "alive").length;
+    report.deadCount  = window.currentResults.filter(r => r.status === "dead").length;
+    localStorage.setItem("reportData", JSON.stringify(report));
+
+    const aliveCountEl = document.getElementById("aliveCountBadge");
+    const deadCountEl  = document.getElementById("deadCountBadge");
+    if (aliveCountEl) aliveCountEl.innerHTML = `<i class="bi bi-check-circle"></i> Alive: ${report.aliveCount}`;
+    if (deadCountEl)  deadCountEl.innerHTML  = `<i class="bi bi-x-octagon"></i> Dead: ${report.deadCount}`;
+  }
+};

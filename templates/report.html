@@ -181,11 +181,25 @@
             ${ref.statementValue ? `<p><strong>Value:</strong> ${ref.statementValue}</p>` : ""}
             <p><a href="${ref.url}" target="_blank" title="${ref.url}">${ref.url}</a></p>
             ${
-              ref.status === "dead"
-              ? `<div class="alert alert-warning p-2 mt-2">
-                   ⚠️ Suggestion: Please review or update this reference.
+              ref.status === "dead" && ref.suggestedArchive
+              ? `<div class="alert alert-info p-3 mt-2">
+                   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                     <div class="text-break" style="max-width: 75%;">
+                       <strong>🔁 Version archivée suggérée (Wayback Machine) :</strong><br>
+                       <a href="${ref.suggestedArchive.archiveUrl}" target="_blank" class="fw-semibold">
+                         ${ref.suggestedArchive.archiveUrl}
+                       </a>
+                     </div>
+                     <button class="btn btn-sm btn-primary" onclick="copyReportArchive('${ref.suggestedArchive.archiveUrl}', this)">
+                       📋 Copier l'archive
+                     </button>
+                   </div>
                  </div>`
-              : ""
+              : (ref.status === "dead"
+                 ? `<div class="alert alert-warning p-2 mt-2">
+                      ⚠️ Suggestion: Please review or update this reference.
+                    </div>`
+                 : "")
             }
           </div>
         </div>
@@ -293,6 +307,23 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  /** Copier l'URL archivée depuis la page de rapport */
+  function copyReportArchive(url, btn) {
+    navigator.clipboard.writeText(url).then(() => {
+      const orig = btn.innerHTML;
+      btn.innerHTML = "✅ Copié !";
+      btn.classList.remove("btn-primary");
+      btn.classList.add("btn-success");
+      setTimeout(() => {
+        btn.innerHTML = orig;
+        btn.classList.remove("btn-success");
+        btn.classList.add("btn-primary");
+      }, 2000);
+    }).catch(() => {
+      prompt("Copiez l'URL :", url);
+    });
   }
 </script>
 

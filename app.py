@@ -9,9 +9,7 @@ WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 WAYBACK_API = "https://archive.org/wayback/available"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/115.0.0.0 Safari/537.36"
+    "User-Agent": "WikidataReferenceValidator/1.0 (Hackathon2026; https://github.com/Balavane/Wikidata-Reference-Validator-Hackathon2026) Python/3.12"
 }
 
 
@@ -159,10 +157,10 @@ def fetch_labels(ids):
 @app.route("/validate", methods=["POST"])
 def validate_references():
     data = request.get_json(force=True)
-    if not data or "qid" not in data:
-        return jsonify({"error": "Missing QID"}), 400
+    if not data or not data.get("qid"):
+        return jsonify({"error": "Missing or invalid QID. Please select an item from the suggestions list."}), 400
 
-    qid = data["qid"].strip()
+    qid = str(data["qid"]).strip()
 
     try:
         params = {
