@@ -214,7 +214,7 @@ body:not(.page-home) .site-header { border-bottom-color: var(--border); }
   transition: opacity 0.2s;
 }
 .brand:hover { color: var(--text); }
-.brand__logo { display: block; height: 20px; width: auto; }
+.brand__logo { display: block; height: 26px; width: auto; }
 .brand__name { font-weight: 600; font-size: 0.98rem; letter-spacing: -0.02em; }
 .brand__version {
   padding: 0 6px;
@@ -337,7 +337,7 @@ body:not(.page-home) .site-header { border-bottom-color: var(--border); }
 
 .hero__logo {
   display: block;
-  height: 46px;
+  height: 64px;
   width: auto;
   margin: 0 auto 26px;
 }
