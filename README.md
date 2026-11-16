@@ -18,7 +18,9 @@ This tool checks the external reference URLs on a Wikidata item (QID) to determi
 
 ## 🧪 Live Demo
 
-Coming soon — for now, run locally 👇
+The current `main` branch runs on Toolforge:
+
+**https://wikidata-reference-validator.toolforge.org**
 
 ---
 
@@ -191,6 +193,55 @@ secret — both are git-ignored.
 | `GET /oauth/login` | Starts the flow and redirects to Wikimedia |
 | `GET /login/callback` | Exchanges the code, reads the profile, signs the user in (`/oauth/callback` is kept as an alias) |
 | `POST /logout` | Clears the session |
+
+---
+
+## 🚀 Deploying to Toolforge
+
+The tool runs as a `python3.13` webservice. Toolforge's uwsgi runner loads
+`www/python/src/app.py` using the virtualenv in `www/python/venv`, so a deploy
+is "sync the tracked files, install requirements, restart".
+
+Configuration is stored as Toolforge environment variables, not a `.env` file:
+
+```bash
+toolforge envvars create SECRET_KEY "<64 hex chars>"
+toolforge envvars create WIKIMEDIA_CLIENT_ID "a7d62252493d736604d7219ca46e4f05"
+toolforge envvars create WIKIMEDIA_CLIENT_SECRET "<client secret>"
+toolforge envvars create WIKIMEDIA_REDIRECT_URI "https://wikidata-reference-validator.toolforge.org/login/callback"
+toolforge envvars create SESSION_COOKIE_SECURE "true"
+```
+
+Deploy the latest `main`:
+
+```bash
+ssh <your-toolforge-user>@login.toolforge.org
+become wikidata-reference-validator
+cd "$HOME/www/python"
+cp -a src src.bak-$(date +%Y%m%d)          # keep one rollback copy
+rm -rf /tmp/deploy
+git clone --depth 1 https://github.com/JosefAnthony/Wikidata-Reference-Validator-Hackathon2026.git /tmp/deploy
+find src -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+tar -C /tmp/deploy --exclude=.git -cf - . | tar -C src -xf -
+venv/bin/pip install -r src/requirements.txt
+toolforge webservice restart
+```
+
+Then check the result:
+
+```bash
+curl -sS -o /dev/null -w '%{http_code}\n' https://wikidata-reference-validator.toolforge.org/login
+tail -20 "$HOME/uwsgi.log"
+```
+
+A few notes:
+
+* `src/` must be emptied before extracting, otherwise files removed upstream
+  (like the old logo) stay behind and keep being served.
+* The bastion's NFS view can lag behind the running pod. If the old build is
+  still served after a restart, apply the same steps inside the pod with
+  `kubectl exec` (`--chdir` in the uwsgi command shows the directory in use).
+* To roll back: `rm -rf src && mv src.bak-<date> src`, then restart.
 
 ---
 
