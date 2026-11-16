@@ -253,6 +253,29 @@ A few notes:
 
 ---
 
+## 🔁 Mirroring to GitLab
+
+The tool was originally built from
+[GitLab](https://gitlab.wikimedia.org/josefanthony/wikidata-reference-validator-app).
+That repository's `main` is an older snapshot, and the two histories only share
+their first commit, so GitHub is the source of truth. GitLab is updated through
+the `redesign-2026` branch:
+
+```bash
+git fetch gitlab
+git switch gitlab-sync
+git merge main                                   # pick up new work
+git merge -s ours gitlab/main -m "Merge GitLab main, keeping this tree"
+git push gitlab gitlab-sync:redesign-2026
+```
+
+`gitlab-sync` exists only to make the merge request fast-forward: it carries
+this tree plus GitLab's history. The second `merge` is a no-op unless GitLab
+`main` has gained commits since the last sync. Nothing is ever pushed from
+`gitlab-sync` to GitHub.
+
+---
+
 ## 🧩 Hackathon Tasks
 
 We are using Phabricator to manage all hackathon tasks.
