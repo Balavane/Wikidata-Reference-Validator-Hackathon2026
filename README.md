@@ -223,9 +223,17 @@ rm -rf /tmp/deploy
 git clone --depth 1 https://github.com/JosefAnthony/Wikidata-Reference-Validator-Hackathon2026.git /tmp/deploy
 find src -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 tar -C /tmp/deploy --exclude=.git -cf - . | tar -C src -xf -
+cp /tmp/deploy/deploy/uwsgi.ini uwsgi.ini  # request-header buffer, see below
 venv/bin/pip install -r src/requirements.txt
 toolforge webservice restart
 ```
+
+`deploy/uwsgi.ini` raises uwsgi's request-header buffer. The runner picks up
+`www/python/uwsgi.ini` automatically, and without it the OAuth callback fails:
+Wikimedia's authorization code is ~750 characters and the ingress forwards the
+whole URI as `X-Original-URI`, which overflows the 4 KiB default and makes
+uwsgi drop the request (the browser shows *"upstream connect error or
+disconnect/reset before headers"*).
 
 Then check the result:
 
